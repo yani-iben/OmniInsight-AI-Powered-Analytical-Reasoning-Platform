@@ -95,19 +95,21 @@ Evaluates staffing interventions by balancing labor costs against overtime reduc
 
 The system computes average overtime burden per employee using:
 
-$$
-\text{Average Overtime Per Head} =
-\frac{\max(0,\;T_{\text{overtime}} - 8N_{\text{float}})}
-{C_{\text{crew}}}
-$$
+#### Average Overtime Per Head
+
+```
+Average Overtime Per Head =
+max(0, Total Overtime Hours - 8 × Float Staff Added)
+----------------------------------------------------
+          Baseline Shift Capacity
+```
 
 Where:
 
-| Variable | Description |
-|-----------|-------------|
-| $T_{\text{overtime}}$ | Total collective overtime hours |
-| $N_{\text{float}}$ | Simulated float staff additions |
-| $C_{\text{crew}}$ | Baseline shift staffing capacity (default = 4.0) |
+- `Total Overtime Hours (T_overtime)` = total collective overtime hours
+- `Float Staff Added (N_float)` = simulated float staff additions
+- `Baseline Shift Capacity (C_crew)` = baseline shift staffing capacity (default = 4.0)
+
 
 #### Optimization Logic
 
