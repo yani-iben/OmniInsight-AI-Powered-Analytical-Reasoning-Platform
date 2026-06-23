@@ -1,83 +1,95 @@
 # src/app.py
 import os
-import sys
-import importlib.util
-import streamlit as str_layout 
-import pandas as pd
-import duckdb
-import plotly.express as px
-import time
 import io
-
+import sys
+import time
+import asyncio
+import duckdb
+import pandas as pd
+import plotly.express as px
+import streamlit as st
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+# Force local directory path lookups for clean microservice imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from orchestrator import OmniInsightOrchestrator
 
-# Safe absolute path resolution for decoupled module imports
-current_dir = os.path.dirname(os.path.abspath(__file__))
-orchestrator_path = os.path.join(current_dir, "orchestrator.py")
-spec = importlib.util.spec_from_file_location("orchestrator", orchestrator_path)
-orchestrator_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(orchestrator_module)
-OmniInsightOrchestrator = orchestrator_module.OmniInsightOrchestrator
+# Initialize Streamlit Page Window Configurations
+st.set_page_config(
+    page_title="OmniInsight Operational Command Center",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Global Page Layout Configuration
-str_layout.set_page_config(page_title="OmniInsight Diagnostic Hub", layout="wide")
+# Reference the layout structure variable cleanly
+str_layout = st
 
-str_layout.title("OmniInsight Operational Command Center")
-str_layout.markdown("### *Dynamic Facility Diagnostics: Driving Text Logs from Real Numbers*")
-str_layout.markdown("---")
-
-@str_layout.cache_resource
-def init_orchestrator():
+# Establish a single, persistent Orchestrator instance
+@st.cache_resource
+def get_orchestrator():
     return OmniInsightOrchestrator()
 
-orchestrator = init_orchestrator()
-con = duckdb.connect("data/analytics.duckdb")
+orchestrator = get_orchestrator()
 
-# SYSTEM SIDEBAR CONTROL PANEL & RESOURCE SIMULATOR
+# --- SIDEBAR CONFIGURATION LAYER ---
 with str_layout.sidebar:
-    str_layout.image("https://img.icons8.com/fluent/96/000000/hospital.png", width=80)
-    str_layout.title("OmniInsight Control Center")
-    str_layout.markdown("---")
+    # Force sidebar alert containers to auto-wrap long strings cleanly
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] .element-container div[role="alert"] {
+            white-space: normal !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+            height: auto !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.title("OmniInsight Sandbox Controllers")
+    st.markdown("Use these parameters to run a pre-flight staffing optimization audit.")
     
-    str_layout.subheader("System Configuration")
-    environment_mode = str_layout.selectbox(
-        "Deployment Environment:",
-        ["Local Simulation Subnet", "Staging EHR Mirror", "Production VPC Firewall"]
+    # Core operational sandbox slider inputs with unique keys
+    current_overtime_hours = str_layout.slider(
+        "Current collective overtime hours/shift",
+        min_value=0,
+        max_value=100,
+        value=16,
+        step=1,
+        key="sb_overtime_hours_unique_key"
     )
     
-    str_layout.markdown("---")
+    staffing_intervention = str_layout.slider(
+        "Simulated floating staff additions",
+        min_value=0,
+        max_value=10,
+        value=0,
+        step=1,
+        key="sb_staffing_intervention_unique_key"
+    )
     
-    str_layout.header("Labor Cost & Staffing Optimizer")
-    str_layout.markdown("Analyze the financial trade-offs between paying active staff overtime vs. deploying additional floating capacity:")
-    
-    BASE_HOURLY_RATE = 45.0  # Standard nurse/staff hourly wage
+    # Financial Configuration Parameters
+    BASE_HOURLY_RATE = 45.0
     OVERTIME_MULTIPLIER = 1.5
     NEW_HIRE_FIXED_COST = 500.0
-
-    current_overtime_hours = str_layout.slider(
-        "Current collective overtime hours/shift:",
-        min_value=0, max_value=40, value=12, step=1,
-        help="Total accumulated hours your active crew is working past their shift limits."
-    )
-
-    staffing_intervention = str_layout.slider(
-        "Simulated floating staff additions:",
-        min_value=0, max_value=5, value=0, step=1,
-        help="Deploying new floating members instantly absorbs active overtime hours."
-    )
     
+    # Financial and Clinical Safety Engine Calculations
     total_overtime_cost = current_overtime_hours * (BASE_HOURLY_RATE * OVERTIME_MULTIPLIER)
     
-    # Post-intervention state calculations
-    # Each new float nurse safely absorbs 8 hours of collective overtime drain
     hours_absorbed = staffing_intervention * 8
     remaining_overtime_hours = max(0, current_overtime_hours - hours_absorbed)
+    
+    # Calculate average overtime per active crew member
+    avg_overtime_per_head = remaining_overtime_hours / 4.0
+    is_burnout_risk = avg_overtime_per_head >= 4.0
+    
+    # Safety Buffer Math
+    is_overstaffed = (hours_absorbed - current_overtime_hours) >= 8.0 and current_overtime_hours > 0
     
     new_overtime_cost = remaining_overtime_hours * (BASE_HOURLY_RATE * OVERTIME_MULTIPLIER)
     new_staff_overhead = staffing_intervention * NEW_HIRE_FIXED_COST
@@ -86,133 +98,160 @@ with str_layout.sidebar:
     net_savings = total_overtime_cost - total_simulated_cost
     optimized_reduction = staffing_intervention * 12.5
     
-    # INTERACTIVE DIAGNOSTIC OUTPUT
     str_layout.markdown("---")
-    str_layout.markdown("### Cost Optimization Summary")
-    str_layout.metric(label="Current Overtime Premium Drain", value=f"${total_overtime_cost:,.2f}")
-    str_layout.metric(label="Simulated Total Personnel Cost", value=f"${total_simulated_cost:,.2f}")
+    str_layout.markdown("### Cost and Fatigue Optimization Summary")
     
-    if net_savings > 0:
-        str_layout.success(f"**Optimal Strategy Found!** Adding {staffing_intervention} float resources reduces collective overtime burn to {remaining_overtime_hours} hours. **Net Savings: ${net_savings:,.2f}** per shift, while compressing bottlenecks by **{optimized_reduction:.1f} minutes**.")
-    elif net_savings < 0:
-        str_layout.error(f" **Diminishing Returns:** The fixed onboarding/routing overhead of ${new_staff_overhead:,.2f} outweighs the overtime premium savings. Retaining existing staff on overtime is **${abs(net_savings):,.2f} cheaper** for this specific volumetric scale.")
+    # 1. Alert Messages: Render across the FULL width of the sidebar first
+    if is_burnout_risk:
+        str_layout.error(f"CRITICAL BURNOUT THREAT: Active staff are averaging {avg_overtime_per_head:.1f} hours of overtime this shift. Cognitive fatigue thresholds have breached safety parameters, exponentially increasing clinical error risk and turnover probability.")
+    elif remaining_overtime_hours > 0:
+        str_layout.warning(f"Ambient Fatigue Warning: Staff are handling an average of {avg_overtime_per_head:.1f} hours of overtime. Monitor closely for shift crossovers.")
     else:
-        str_layout.info("Adjust the sliders to run a pre-flight staffing optimization audit.")
+        str_layout.success("Staff Fatigue Nominal: Overtime workload safely stabilized.")
 
-# INITIALIZE BACKGROUND WORKER SYSTEM & CONVERSATIONAL MEMORY STATE
-if "executor" not in str_layout.session_state:
-    str_layout.session_state.executor = ThreadPoolExecutor(max_workers=3)
+    # 2. Priority Override Logic with Explicit Spaces to Prevent Fused Words
+    if is_overstaffed:
+        line1 = f"Diminishing Returns Detected: You have allocated excess floating staff. "
+        line2 = f"The baseline overhead of ${new_staff_overhead:,.2f} is actively wasting capital "
+        line3 = f"because your overtime backlog is already completely cleared."
+        str_layout.error(line1 + line2 + line3)
+        
+    elif is_burnout_risk and net_savings > 0:
+        line1 = f"Insufficient Intervention: Adding {staffing_intervention} float resource "
+        line2 = f"saves a nominal ${net_savings:,.2f}, but fails to resolve the core crisis. "
+        line3 = f"Permanent staff are still operating past safe cognitive limits. Increase float allocation to decompress the unit."
+        str_layout.warning(line1 + line2 + line3)
+        
+    elif net_savings > 0 and staffing_intervention > 0 and not is_burnout_risk:
+        line1 = f"Optimal Strategy Found! Adding {staffing_intervention} float resources "
+        line2 = f"reduces collective overtime burn to {remaining_overtime_hours} hours. "
+        line3 = f"Net Savings: ${net_savings:,.2f} per shift, while compressing bottlenecks by {optimized_reduction:.1f} minutes."
+        str_layout.success(line1 + line2 + line3)
+        
+    elif net_savings < 0 and staffing_intervention > 0:
+        # Build an explicit HTML card that forces character-by-character line breaks
+        line1 = f"Inefficient Allocation: The fixed onboarding overhead of ${new_staff_overhead:,.2f} "
+        line2 = f"outweighs your overtime premium savings. "
+        line3 = f"Retaining existing staff on overtime is ${abs(net_savings):,.2f} cheaper than deploying this many assets."
+        full_message = line1 + line2 + line3
+        
+        str_layout.markdown(
+            f"""
+            <div style="
+                background-color: #ffeeba; 
+                color: #856404; 
+                padding: 0.75rem 1rem; 
+                border-radius: 0.25rem; 
+                border: 1px solid #ffeeba;
+                margin-bottom: 1rem;
+                font-size: 0.85rem;
+                white-space: normal !important;
+                word-break: break-all !important;
+                overflow-wrap: break-word !important;
+            ">
+                {full_message}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-if "query_history" not in str_layout.session_state:
-    str_layout.session_state.query_history = {}
+    str_layout.markdown("---")
+    
+    # 3. KPI Metrics Column Layer: Split ONLY the numbers into columns at the very bottom
+    kpi_sub1, kpi_sub2 = str_layout.columns(2)
+    with kpi_sub1:
+        str_layout.metric(label="Current Overtime Premium", value=f"${total_overtime_cost:,.2f}")
+    with kpi_sub2:
+        str_layout.metric(label="Simulated Total Cost", value=f"${total_simulated_cost:,.2f}")
 
-async def run_analytics_pipeline(prompt, history):
-    """
-    Offloads heavy compiler operations and state logging logic to background threads,
-    ensuring rendering overhead never bottlenecks the fluid interface.
-    """
-    loop = asyncio.get_running_loop()
-    sql_query, updated_history = await loop.run_in_executor(
-        str_layout.session_state.executor, orchestrator.compile_nl_to_sql, prompt, history
-    )
-    return sql_query, updated_history
 
-# 3. GLOBAL OPERATIONAL SEARCH ENGINE LAYER
-str_layout.markdown("#### Global Operational Search Engine")
-user_prompt = str_layout.text_input(
+# --- MAIN INTERFACE DISPLAY LAYER ---
+str_layout.title("OmniInsight Operational Command Center")
+str_layout.markdown("Enterprise Intelligence Pipeline linking DuckDB Relational Schemas and Pinecone Vector Knowledge Maps.")
+
+# Global Operational Search Engine Input Field
+user_query = str_layout.text_input(
     "Type an operational problem, department, or query to audit facility health:",
-    value="Show me wait times for our ICU department",
-    placeholder="e.g., who is discharged, what is their wait time, evaluate weekend trends..."
+    placeholder="e.g., when are wait times the longest, show me ICU bottlenecks, what is acuity level 3"
 )
 
-if user_prompt:
-    # Telemetry performance benchmark marker
-    start_perf_time = time.perf_counter()
-    
-    # Execute compilation loop inside the background thread pool
-    sql_query, updated_history = asyncio.run(run_analytics_pipeline(user_prompt, str_layout.session_state.query_history))
-    str_layout.session_state.query_history = updated_history
-    
-    # Intent Control Flow Guardrail Block
-    if sql_query in ["CONCEPTUAL_INQUIRY_BYPASS", "ASSISTANT_INQUIRY_BYPASS"]:
-        df_metrics = pd.DataFrame()
-    else:
-        df_metrics = con.execute(sql_query).fetchdf()
-    
-    # Process diagnosis strings and vector log matching paths
-    headline, matched_log, action_plan = orchestrator.diagnose_facility_bottleneck(user_prompt, sql_query)
-    
-    # Calculate operational pipeline execution latency
-    execution_latency = (time.perf_counter() - start_perf_time) * 1000
-    str_layout.sidebar.metric(label="Engine Routing Latency", value=f"{execution_latency:.2f} ms", delta="-14% vs Baseline")
-    
-    str_layout.markdown("---")
-    
-    #  EXECUTIVE SUMMARY INTERACTIVE METRIC CARDS
-    if not df_metrics.empty:
-        total_impacted_patients = df_metrics["total_patients"].sum() if "total_patients" in df_metrics.columns else len(df_metrics)
-        avg_delay = df_metrics["avg_los_minutes"].mean() if "avg_los_minutes" in df_metrics.columns else 15.0
-        estimated_leakage = total_impacted_patients * avg_delay * 2.15
-        
-        kpi_1, kpi_2, kpi_3 = str_layout.columns(3)
-        with kpi_1:
-            str_layout.metric(label="Active Patient Exposure", value=f"{total_impacted_patients} Encounters", delta="Elevated Volumetric Load")
-        with kpi_2:
-            str_layout.metric(label="Estimated Operational Waste/Hr", value=f"${estimated_leakage:,.2f}", delta="-8.4% Efficiency", delta_color="inverse")
-        with kpi_3:
-            severity_label = "CRITICAL RISK" if avg_delay > 180 else "0.00" if avg_delay == 0 else "AMBIENT DELAY"
-            str_layout.metric(label="System Status Priority", value=severity_label, delta="Action Required Immediate")
-        
-        str_layout.markdown("---")
+str_layout.markdown("---")
 
-    # 5. TWO-COLUMN MAIN CONTROL INTERFACE PANELS
-    col_visual, col_diagnosis = str_layout.columns([3, 2])
+# Main Page Split Layout
+col_visual, col_diagnosis = str_layout.columns([3, 2])
+
+# Initialize global placeholder trackers
+df_data = None
+metric_headline = ""
+log_match = ""
+recommendation = ""
+
+with col_visual:
+    str_layout.subheader("Live Performance Analytics")
     
-    with col_visual:
-        str_layout.subheader("Live Performance Analytics")
+    if user_query:
+        # Route query through the self-healing orchestrator layer
+        metric_headline, log_match, recommendation, df_data = orchestrator.diagnose_facility_bottleneck(user_query)
         
-        if sql_query == "CONCEPTUAL_INQUIRY_BYPASS":
-            str_layout.info(" **Knowledge Base Layer Active**\n\nYour query requires an institutional glossary lookup rather than a numerical calculation. The analytics dashboard has dynamically pivoted to scan unstructured administrative files.")
-        elif sql_query == "ASSISTANT_INQUIRY_BYPASS":
-            str_layout.success("**Assistant Workspace Active**\n\nDirecting output tracking into operational text summaries and template drafts.")
-        elif "avg_los_minutes" in df_metrics.columns:
-            # Polymorphic UI defense block - changes charts depending on columns present
-            if "acuity_level" in df_metrics.columns:
-                dest_col = "destination" if "destination" in df_metrics.columns else "disposition"
-                fig = px.bar(df_metrics, x="acuity_level", y="avg_los_minutes", color=dest_col, barmode="group",
-                             title="Length of Stay (Minutes) by Patient Urgency & Tracked Unit")
+        # Display the dynamic operational status headline
+        str_layout.markdown(f"### {metric_headline}")
+        
+        # Polymorphic Chart Engine
+        if df_data is not None and not df_data.empty:
+            if "hour" in df_data.columns:
+                str_layout.markdown("#### Length of Stay Trends by Hour of Day")
+                metric_col = "avg_los_minutes" if "avg_los_minutes" in df_data.columns else df_data.columns[1]
+                
+                fig = px.line(
+                    df_data, 
+                    x="hour", 
+                    y=metric_col, 
+                    title="Hourly Throughput Backlog Timeline",
+                    labels={"hour": "Hour of Day (24h)", metric_col: "Average Length of Stay (Minutes)"},
+                    markers=True
+                )
+                fig.update_layout(xaxis=dict(tickmode='linear', tick0=0, dtick=2))
+                str_layout.plotly_chart(fig, use_container_width=True)
+                
+            elif "disposition" in df_data.columns:
+                str_layout.markdown("#### Average Length of Stay by Department")
+                fig = px.bar(
+                    df_data, 
+                    x="disposition", 
+                    y="avg_los_minutes",
+                    color="disposition",
+                    title="Departmental Bottleneck Overview",
+                    labels={"disposition": "Department Unit", "avg_los_minutes": "Avg Wait (Mins)"}
+                )
+                str_layout.plotly_chart(fig, use_container_width=True)
             else:
-                dest_col = "disposition" if "disposition" in df_metrics.columns else df_metrics.columns[0]
-                fig = px.bar(df_metrics, x=dest_col, y="avg_los_minutes", color=dest_col,
-                             title="Average Length of Stay (Minutes) by Department")
-            str_layout.plotly_chart(fig, use_container_width=True)
-        elif "peak_volume" in df_metrics.columns:
-            fig = px.line(df_metrics, x="hour", y="avg_volume", title="Hourly Volume Demands", labels={"avg_volume": "Avg Patients/Hr"})
-            fig.update_traces(line_color='#FF4B4B', line_width=2)
-            str_layout.plotly_chart(fig, use_container_width=True)
+                str_layout.dataframe(df_data, use_container_width=True)
         else:
-            str_layout.markdown("### Prioritized Operational Action Dispatch")
-            # Gradient highlighting to call out high volume thresholds interactively
-            subset_col = ['total_patients'] if 'total_patients' in df_metrics.columns else []
-            styled_df = df_metrics.style.background_gradient(cmap='YlOrRd', subset=subset_col)
-            str_layout.dataframe(styled_df, use_container_width=True, hide_index=True)
-            
-    with col_diagnosis:
-        str_layout.subheader("System Diagnostic Summary")
-        str_layout.warning(f"**Metric Anomaly Flagged:**\n{headline}")
-        str_layout.info(f"**Verifiable Log Evidence (FAISS Match):**\n\n{matched_log}")
-        str_layout.success(f"**Prescriptive Action Plan:**\n\n{action_plan}")
+            str_layout.info("No active structured data returned for this operational view layout.")
+    else:
+        str_layout.info("Enter an operational problem or query in the search engine above to generate live tracking analytics.")
+        
+with col_diagnosis:
+    str_layout.subheader("System Diagnostic Summary")
+    if user_query:
+        str_layout.warning(f"**Metric Anomaly Flagged:**\n{metric_headline}")
+        str_layout.info(f"**Verifiable Log Evidence (Pinecone Match):**\n\n{log_match}")
+        str_layout.success(f"**Prescriptive Action Plan:**\n\n{recommendation}")
+    else:
+        str_layout.info("Awaiting pipeline diagnostic activation...")
 
-if user_prompt and not df_metrics.empty:
+# --- EXECUTIVE BRIEFING REPORT STUDIO ---
+if user_query and df_data is not None and not df_data.empty:
     str_layout.markdown("---")
     str_layout.subheader("Executive Incident Briefing Studio")
     
-    max_detected_wait = df_metrics["avg_los_minutes"].max() if "avg_los_minutes" in df_metrics.columns else 0
+    max_detected_wait = df_data["avg_los_minutes"].max() if "avg_los_minutes" in df_data.columns else 0
+    total_impacted_patients = df_data["total_patients"].sum() if "total_patients" in df_data.columns else 0
     
-    if max_detected_wait > 120:  # Threshold breach
-        str_layout.error(f"**Automated Alert Triggered:** Localized wait times have breached safety thresholds ({max_detected_wait:.0f} mins). Immediate capacity redistribution is recommended.")
+    if max_detected_wait > 120:
+        str_layout.error(f"Automated Alert Triggered: Localized wait times have breached safety thresholds ({max_detected_wait:.0f} mins). Immediate capacity redistribution is recommended.")
         
-        # THE IN-MEMORY PDF COMPILATION ENGINE
+        # In-Memory PDF Compilation Engine
         def create_pdf_report():
             buffer = io.BytesIO()
             doc = SimpleDocTemplate(
@@ -224,7 +263,6 @@ if user_prompt and not df_metrics.empty:
             styles = getSampleStyleSheet()
             story = []
             
-            # Custom Corporate Styles
             title_style = ParagraphStyle(
                 'DocTitle', parent=styles['Heading1'],
                 fontSize=24, leading=28, textColor=colors.HexColor('#FF4B4B'), spaceAfter=12
@@ -247,23 +285,21 @@ if user_prompt and not df_metrics.empty:
                 leftIndent=15, rightIndent=15, spaceAfter=12
             )
             
-            # Content Assembly
             report_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
             story.append(Paragraph("OMNIINSIGHT INCIDENT BRIEFING REPORT", title_style))
             story.append(Paragraph(f"<b>Generated:</b> {report_timestamp}<br/><b>System Status:</b> CRITICAL CAPACITY CONSTRAINT", meta_style))
             story.append(Spacer(1, 10))
             
             story.append(Paragraph("1. Quantitative Baseline Telemetry", h2_style))
-            story.append(Paragraph(f"• <b>Target Query Context:</b> \"{user_prompt}\"", body_style))
+            story.append(Paragraph(f"• <b>Target Query Context:</b> \"{user_query}\"", body_style))
             story.append(Paragraph(f"• <b>Peak Impacted Threshold:</b> {max_detected_wait:.1f} Minutes Avg Length of Stay", body_style))
             story.append(Paragraph(f"• <b>Total Patients Affected in Window:</b> {total_impacted_patients} active encounters", body_style))
             
-            story.append(Paragraph("2. Institutional Log Evidence (FAISS Vector Match)", h2_style))
-            story.append(Paragraph(f"<i>\"{matched_log}\"</i>", quote_style))
+            story.append(Paragraph("2. Institutional Log Evidence (Pinecone Cloud Vector Match)", h2_style))
+            story.append(Paragraph(f"<i>\"{log_match}\"</i>", quote_style))
             
             story.append(Paragraph("3. Prescriptive Strategic Mandate", h2_style))
-            # Split bullet recommendations cleanly by line breaks
-            for line in action_plan.split('\n'):
+            for line in recommendation.split('\n'):
                 if line.strip():
                     story.append(Paragraph(line, body_style))
                     
@@ -274,12 +310,10 @@ if user_prompt and not df_metrics.empty:
             buffer.seek(0)
             return buffer.getvalue()
             
-        # Compile PDF data dynamically
         pdf_data = create_pdf_report()
         
         rep_col1, rep_col2 = str_layout.columns([1, 4])
         with rep_col1:
-            # Streamlit download button handles the file payload securely
             str_layout.download_button(
                 label="Export Executive PDF",
                 data=pdf_data,
@@ -288,8 +322,6 @@ if user_prompt and not df_metrics.empty:
                 use_container_width=True
             )
         with rep_col2:
-            str_layout.info("**Distribution Ready:** Your operational analytics and matched FAISS text evidence have been compiled into a finalized, un-editable enterprise PDF document.")
+            str_layout.info("Distribution Ready: Your operational analytics and matched cloud vector text evidence have been compiled into a finalized, un-editable enterprise PDF document.")
     else:
-        str_layout.success("**Operational Thresholds Nominal:** No structural metric anomalies detected. Automated PDF report synthesis suspended.")
-
-con.close()
+        str_layout.success("Operational Thresholds Nominal: No structural metric anomalies detected. Automated PDF report synthesis suspended.")

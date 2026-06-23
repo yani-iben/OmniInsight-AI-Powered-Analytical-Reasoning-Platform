@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  web-app:
+    container_name: web-app-1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: streamlit run src/app.py --server.fileWatcherType poll

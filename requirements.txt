@@ -1,17 +1,8 @@
-# Core Analytical Engine & Database
+streamlit==1.35.0
 duckdb==1.0.0
-pandas==2.2.2
-
-# Unstructured Vector Knowledge Layer
 faiss-cpu==1.8.0.post1
 sentence-transformers==3.0.1
-numpy==1.26.4
-
-# User Interface & Visualizations
-streamlit==1.36.0
 plotly==5.22.0
-
-# Testing & Quality Gateways
-pytest==8.2.2
-
 reportlab==4.2.2
+pinecone-client==5.0.1
+python-dotenv==1.0.1
