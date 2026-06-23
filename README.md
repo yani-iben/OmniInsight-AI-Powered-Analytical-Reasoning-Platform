@@ -95,8 +95,7 @@ Evaluates staffing interventions by balancing labor costs against overtime reduc
 
 The system computes average overtime burden per employee using:
 
-$$
-\text{Average Overtime Per Head}
+Average Overtime Per Head
 =
 \frac{\max(0,\;T_{\text{overtime}} - 8 \cdot N_{\text{float}})}
 {C_{\text{crew}}}
