@@ -13,3 +13,5 @@ plotly==5.22.0
 
 # Testing & Quality Gateways
 pytest==8.2.2
+
+reportlab==4.2.2
