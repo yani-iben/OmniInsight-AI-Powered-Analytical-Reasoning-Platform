@@ -1,0 +1,15 @@
+# Core Analytical Engine & Database
+duckdb==1.0.0
+pandas==2.2.2
+
+# Unstructured Vector Knowledge Layer
+faiss-cpu==1.8.0.post1
+sentence-transformers==3.0.1
+numpy==1.26.4
+
+# User Interface & Visualizations
+streamlit==1.36.0
+plotly==5.22.0
+
+# Testing & Quality Gateways
+pytest==8.2.2
